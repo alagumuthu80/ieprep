@@ -1,26 +1,58 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --gg-beige:       #FDF6EC;
+  --gg-beige-dark:  #F5EBD8;
+  --gg-brown:       #3D2E1C;
+  --gg-brown-mid:   #7A5C3A;
+  --gg-green:       #4A7A2E;
+  --gg-green-light: #8BB86E;
+  --gg-green-pale:  #D6EBBB;
+  --gg-pink:        #D4748A;
+  --gg-pink-light:  #F5C4D1;
+  --gg-sky:         #B8D9F0;
+  --gg-sky-dark:    #7AB8E0;
+  --gg-sun:         #F5C842;
+  --gg-white:       #FFFDF7;
+  --gg-card-border: #D9C9A8;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--gg-beige);
+  color: var(--gg-brown);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Paper-cut card style */
+.gg-card {
+  background: var(--gg-white);
+  border: 1.5px solid var(--gg-card-border);
+  border-radius: 16px;
+  box-shadow: 3px 4px 0px var(--gg-beige-dark);
+}
+
+.gg-card-green {
+  background: var(--gg-green-pale);
+  border: 1.5px solid var(--gg-green-light);
+  border-radius: 16px;
+  box-shadow: 3px 4px 0px #C3DE9E;
+}
+
+/* Garden select / input */
+.gg-input {
+  background: var(--gg-white);
+  border: 1.5px solid var(--gg-card-border);
+  border-radius: 10px;
+  color: var(--gg-brown);
+}
+.gg-input:focus {
+  outline: none;
+  border-color: var(--gg-green);
+  box-shadow: 0 0 0 3px rgba(74,122,46,0.15);
+}
+
+/* Progress bars */
+.gg-progress-emerging  { background: #E8829A; }
+.gg-progress-developing { background: var(--gg-sun); }
+.gg-progress-approaching { background: var(--gg-green-light); }
+.gg-progress-mastered  { background: var(--gg-green); }
