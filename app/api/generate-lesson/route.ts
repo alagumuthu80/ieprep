@@ -5,77 +5,97 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { subject, grade, sol, weeks, duration, disabilityType, accommodations, studentNeeds, studentGoals } = body;
+  const {
+    subject, grade, sols, weeks, duration,
+    disabilityTypes, accommodations, studentNeeds,
+    studentGoals, classStudents,
+  } = body;
+
+  const solList = Array.isArray(sols) ? sols : [sols];
+  const disabilityList = Array.isArray(disabilityTypes) ? disabilityTypes : [disabilityTypes];
 
   const goalContext = studentGoals?.length
     ? `\n\nCurrent IEP Goals & Progress:\n${studentGoals
-        .map(
-          (g: { area: string; goal: string; progress: string; lastScore: string }) =>
-            `- ${g.area}: "${g.goal}" — Progress: ${g.progress} (last score: ${g.lastScore})`
-        )
-        .join("\n")}`
+        .map((g: { area: string; goal: string; progress: string; lastScore: string }) =>
+          `- ${g.area}: "${g.goal}" — Progress: ${g.progress} (last score: ${g.lastScore})`
+        ).join("\n")}`
     : "";
 
-  const prompt = `You are an expert special education teacher creating a differentiated lesson plan for a student with ${disabilityType}.
+  const classContext = classStudents?.length
+    ? `\n\nClass Roster (${classStudents.length} students):\n${classStudents
+        .map((s: { name: string; disabilityType: string; readingLevel: string; accommodations: string[] }) =>
+          `- ${s.name}: ${s.disabilityType}, reading at ${s.readingLevel}, needs: ${s.accommodations.join(", ")}`
+        ).join("\n")}`
+    : "";
 
-Student Profile:
+  const isClass = !!classStudents?.length;
+  const audienceDesc = isClass
+    ? `a class of ${classStudents.length} students with diverse needs`
+    : `a student with ${disabilityList.join(" and ")}`;
+
+  const prompt = `You are an expert special education teacher creating a differentiated lesson plan for ${audienceDesc}.
+
+Lesson Configuration:
 - Subject: ${subject}
 - Grade Level: ${grade}
-- Virginia SOL: ${sol}
+- Virginia SOLs: ${solList.join(", ")}
 - Lesson Timeframe: ${weeks} week(s), ${duration} minutes per session
-- Disability Type: ${disabilityType}
-- Accommodations: ${accommodations.join(", ")}
-- Student Needs/Notes: ${studentNeeds || "None specified"}${goalContext}
+- Disability Types Represented: ${disabilityList.join(", ")}
+- Accommodations in Use: ${accommodations.join(", ")}
+- Additional Notes: ${studentNeeds || "None"}${goalContext}${classContext}
 
 Create a detailed, differentiated lesson plan that:
-1. Is aligned to Virginia SOL ${sol}
-2. Specifically addresses the needs of a student with ${disabilityType}
-3. Incorporates all listed accommodations naturally throughout
-4. Adjusts pacing and complexity to meet the student where they are
-5. Uses evidence-based strategies for this disability type
-${studentGoals?.length ? "6. Includes specific activities that target and advance the listed IEP goals" : ""}
+1. Addresses ALL listed Virginia SOLs (${solList.join(", ")})
+2. Meets the needs of students with: ${disabilityList.join(", ")}
+3. Weaves all accommodations naturally throughout
+4. Uses evidence-based strategies for each disability type represented
+5. Includes tiered activities so every student can access the content at their level
+${studentGoals?.length ? "6. Embeds activities that directly advance the listed IEP goals" : ""}
+${isClass ? "6. Differentiates by student need while maintaining one cohesive class lesson" : ""}
 
-Format the lesson plan with these sections:
+Format the lesson plan with these clearly labeled sections:
+
 ## Learning Objectives
-(2-3 measurable objectives aligned to the SOL and student's level)
+(2-3 measurable objectives tied to each SOL, written at accessible level)
 
-## Materials & Accommodations Setup
-(specific materials needed, how accommodations are set up)
+## Materials & Setup
+(specific materials, how accommodations are physically arranged)
 
 ## Lesson Structure (${duration} min)
-(Break into: Warm-Up, Direct Instruction, Guided Practice, Independent Practice, Closure — with time for each)
+**Warm-Up (5-10 min)**
+**Direct Instruction (${Math.round(parseInt(duration)*0.25)} min)**
+**Guided Practice (${Math.round(parseInt(duration)*0.30)} min)**
+**Independent Practice (${Math.round(parseInt(duration)*0.25)} min)**
+**Closure / Exit Ticket (5 min)**
 
-## Differentiation Strategies
-(specific strategies for ${disabilityType})
+## Differentiation by Disability Type
+(specific strategies for each disability category in this lesson)
 
 ## IEP Goal Integration
-(how each activity supports IEP goals)
+(how each phase of the lesson builds toward IEP goals)
 
-## Assessment
-(how to check for understanding given the student's needs)
+## Assessment Strategies
+(how to check understanding given diverse learner needs)
 
-## Modifications If Student Struggles
-(specific fallback strategies)
+## If Students Struggle
+(specific fallback strategies and scaffolds)
 
-Be specific, practical, and teacher-ready. Avoid jargon. Write as if you are handing this to a first-year special education teacher.`;
+Be specific, practical, and teacher-ready. Write as if handing this to a first-year special education teacher.`;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const stream = await anthropic.messages.create({
+        const aiStream = await anthropic.messages.create({
           model: "claude-opus-4-8",
-          max_tokens: 4000,
+          max_tokens: 5000,
           thinking: { type: "adaptive" },
           stream: true,
           messages: [{ role: "user", content: prompt }],
         });
 
-        for await (const event of stream) {
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
+        for await (const event of aiStream) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
             controller.enqueue(encoder.encode(event.delta.text));
           }
         }

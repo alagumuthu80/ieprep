@@ -164,6 +164,43 @@ export const DEMO_STUDENTS = [
 
 export type TrialScore = "1/4" | "2/4" | "3/4" | "4/4";
 
+export type Grade = "6" | "7" | "8";
+export type Subject = "Math" | "ELA";
+
+export type ClassStudentEntry = {
+  id: string;
+  name: string;
+  grade: Grade;
+  disabilityType: string;
+  accommodations: string[];
+  readingLevel: string;
+};
+
+export type SchoolClass = {
+  id: string;
+  name: string;
+  period: string;
+  subject: Subject;
+  grade: Grade;
+  students: ClassStudentEntry[];
+};
+
+export const DEMO_CLASSES: SchoolClass[] = [
+  {
+    id: "cls001",
+    name: "Period 3 — 8th Grade ELA",
+    period: "3",
+    subject: "ELA",
+    grade: "8",
+    students: [
+      { id: "11112", name: "Alex R.",    grade: "8", disabilityType: "SLD (Specific Learning Disability)",  accommodations: ["Audio/online read-aloud", "Word prediction software", "Extended time"], readingLevel: "3rd grade" },
+      { id: "11113", name: "Jordan M.",  grade: "8", disabilityType: "OHI/ADHD (Other Health Impairment)", accommodations: ["Small group testing", "Frequent breaks", "Preferential seating"], readingLevel: "5th grade" },
+      { id: "11114", name: "Mia T.",     grade: "8", disabilityType: "EBD (Emotional Behavioral Disorder)", accommodations: ["Preferential seating", "Frequent breaks"], readingLevel: "6th grade" },
+      { id: "11115", name: "Carlos V.",  grade: "8", disabilityType: "ID (Intellectual Disability)",        accommodations: ["Visual supports and graphic organizers", "Manipulatives", "Extended time"], readingLevel: "4th grade" },
+    ],
+  },
+];
+
 export function getProgressLevel(trials: { score: string }[]): "emerging" | "developing" | "approaching" | "mastered" {
   if (!trials.length) return "emerging";
   const last = trials[trials.length - 1].score;
