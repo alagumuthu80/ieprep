@@ -236,7 +236,7 @@ export default function SlideViewer({ slides, onClose }: Props) {
           )}
 
           {/* Top bar */}
-          <div className="flex items-center justify-between px-6 pt-4 pb-2 z-10">
+          <div className="flex items-center justify-between px-6 pt-4 pb-2 relative" style={{ zIndex: 40 }}>
             <span style={{
               fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em",
               padding: "4px 12px", borderRadius: "99px",
