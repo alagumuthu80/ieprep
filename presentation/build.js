@@ -86,8 +86,9 @@ function tag(slide, x, y, text, fill = C.green, color = C.white) {
 function kicker(slide, num, label) {
   slide.addText(`${num}`, {
     x: 0.6, y: 0.5, w: 0.7, h: 0.7, align: "center", valign: "middle",
-    fontFace: HF, fontSize: 20, bold: true, color: C.white,
+    fontFace: HF, fontSize: 18, bold: true, color: C.white,
     fill: { color: C.green }, shape: p.ShapeType.ellipse,
+    margin: 0, autoFit: true,
   });
   slide.addText(label.toUpperCase(), {
     x: 1.45, y: 0.5, w: 9, h: 0.7, align: "left", valign: "middle",
