@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
     ? `a class of ${classStudents.length} students with diverse needs`
     : `a student with ${disabilityList.join(" and ")}`;
 
+  // ~4 instructional sessions per week
+  const numWeeks = Math.max(1, parseInt(weeks) || 1);
+  const sessionsPerWeek = 4;
+  const totalSessions = numWeeks * sessionsPerWeek;
+
   const prompt = `You are an expert special education teacher creating a differentiated lesson plan for ${audienceDesc}.
 
 Lesson Configuration:
@@ -44,38 +49,46 @@ Lesson Configuration:
 - Accommodations in Use: ${accommodations.join(", ")}
 - Additional Notes: ${studentNeeds || "None"}${goalContext}${classContext}
 
+This is a ${numWeeks}-week unit. Spiral the listed SOLs across the unit — introduce, practice, and revisit them so multiple standards are taught together (not one SOL per week in isolation). Break the unit into ${totalSessions} daily class sessions (about ${sessionsPerWeek} sessions per week), each ${duration} minutes long. Each day is ONE class period a teacher will present.
+
 Create a detailed, differentiated lesson plan that:
-1. Addresses ALL listed Virginia SOLs (${solList.join(", ")})
+1. Addresses ALL listed Virginia SOLs (${solList.join(", ")}), weaving several together within most sessions
 2. Meets the needs of students with: ${disabilityList.join(", ")}
 3. Weaves all accommodations naturally throughout
 4. Uses evidence-based strategies for each disability type represented
 5. Includes tiered activities so every student can access the content at their level
 ${studentGoals?.length ? "6. Embeds activities that directly advance the listed IEP goals" : ""}
-${isClass ? "6. Differentiates by student need while maintaining one cohesive class lesson" : ""}
+${isClass ? "7. Differentiates by student need while keeping one cohesive class lesson" : ""}
 
-Format the lesson plan with these clearly labeled sections:
+Format the lesson plan EXACTLY with these sections and heading styles (this exact structure is parsed by software — keep the "### Day N" heading format precise):
+
+## Unit Overview
+(2-3 sentences: the arc of the unit and which SOLs are spiraled when)
 
 ## Learning Objectives
-(2-3 measurable objectives tied to each SOL, written at accessible level)
+(one measurable "Students will be able to..." objective per SOL, at accessible level)
 
 ## Materials & Setup
 (specific materials, how accommodations are physically arranged)
 
-## Lesson Structure (${duration} min)
-**Warm-Up (5-10 min)**
-**Direct Instruction (${Math.round(parseInt(duration)*0.25)} min)**
-**Guided Practice (${Math.round(parseInt(duration)*0.30)} min)**
-**Independent Practice (${Math.round(parseInt(duration)*0.25)} min)**
-**Closure / Exit Ticket (5 min)**
+## Daily Lesson Sessions
 
-## Differentiation by Disability Type
-(specific strategies for each disability category in this lesson)
+### Day 1 (Week 1) — <short focus title>
+**SOLs today:** <which of the listed SOLs this session targets>
+**Warm-Up / Hook (5-10 min):** ...
+**Direct Instruction (${Math.round(parseInt(duration)*0.25)} min):** ...
+**Guided Practice (${Math.round(parseInt(duration)*0.30)} min):** ...
+**Independent Practice (${Math.round(parseInt(duration)*0.25)} min):** ...
+**Closure / Exit Ticket (5 min):** ...
+**Differentiation today:** <brief, specific moves for the disability types present>
 
-## IEP Goal Integration
-(how each phase of the lesson builds toward IEP goals)
+### Day 2 (Week 1) — <short focus title>
+(...same internal structure...)
+
+(Continue for all ${totalSessions} days, labeling each "### Day N (Week W) — title". Keep each day concise but complete.)
 
 ## Assessment Strategies
-(how to check understanding given diverse learner needs)
+(how to check understanding across the unit given diverse learner needs)
 
 ## If Students Struggle
 (specific fallback strategies and scaffolds)
@@ -88,7 +101,7 @@ Be specific, practical, and teacher-ready. Write as if handing this to a first-y
       try {
         const aiStream = await anthropic.messages.create({
           model: "claude-opus-4-8",
-          max_tokens: 5000,
+          max_tokens: 8000,
           thinking: { type: "adaptive" },
           stream: true,
           messages: [{ role: "user", content: prompt }],

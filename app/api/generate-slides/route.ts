@@ -5,15 +5,21 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { lessonPlan, grade, subject, disabilityTypes } = body;
+  const { lessonPlan, grade, subject, disabilityTypes, dayLabel, unitContext } = body;
 
   const disabilities = Array.isArray(disabilityTypes) ? disabilityTypes.join(", ") : disabilityTypes;
 
+  const scopeNote = dayLabel
+    ? `You are building the deck for ONE class period: ${dayLabel}. Generate slides for THIS DAY ONLY — do not summarize the whole unit. ${unitContext ? `\n\nUnit context (for reference only, do not turn into slides):\n${unitContext}` : ""}`
+    : `Build a deck for this single lesson.`;
+
   const prompt = `You are creating Smart Board slides for a special education class (Grade ${grade} ${subject}, students with ${disabilities}).
 
-Based on this lesson plan, generate a slide deck that matches how real special education teachers actually structure their class periods.
+${scopeNote}
 
-LESSON PLAN:
+Generate a slide deck for this ONE class period that matches how real special education teachers structure a period.
+
+TODAY'S LESSON (${dayLabel || "single session"}):
 ${lessonPlan}
 
 Generate 10-14 slides as a JSON array. Use EXACTLY these slide types modeled on real classroom practice:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { VA_SOLS, DISABILITY_TYPES, ACCOMMODATIONS, DEMO_STUDENTS } from "@/lib/data";
 import type { SchoolClass } from "@/lib/data";
 import { Wand2, Download, Loader2, UserCheck, Presentation, X, Users } from "lucide-react";
@@ -90,8 +90,54 @@ function renderLessonPlan(text: string): React.ReactNode[] {
   return elements;
 }
 
+// ── Parse a generated plan into day sessions ───────────────────────────────
+type DaySession = { label: string; title: string; content: string };
+
+function parseDaySessions(plan: string): DaySession[] {
+  const lines = plan.split("\n");
+  const sessions: DaySession[] = [];
+  let currentHeading: string | null = null;
+  let buffer: string[] = [];
+
+  const dayRe = /^###\s+(Day\s+\d+[^\n]*)/i;
+  const stopRe = /^##\s+(?!#)/; // a top-level ## section ends the daily block
+
+  function flush() {
+    if (currentHeading !== null) {
+      const m = currentHeading.match(/Day\s+\d+(?:\s*\(Week\s*\d+\))?/i);
+      const label = m ? m[0].replace(/\s+/g, " ") : currentHeading;
+      const title = currentHeading.replace(/^Day\s+\d+(?:\s*\(Week\s*\d+\))?\s*[—\-:]?\s*/i, "").trim();
+      sessions.push({ label, title, content: `### ${currentHeading}\n${buffer.join("\n")}`.trim() });
+    }
+    buffer = [];
+  }
+
+  for (const line of lines) {
+    const dayMatch = line.match(dayRe);
+    if (dayMatch) {
+      flush();
+      currentHeading = dayMatch[1].trim();
+      continue;
+    }
+    if (currentHeading && stopRe.test(line)) {
+      flush();
+      currentHeading = null;
+      continue;
+    }
+    if (currentHeading) buffer.push(line);
+  }
+  flush();
+  return sessions;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
-export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb: (c: SchoolClass) => void) => void }) {
+export default function LessonPlanGenerator({
+  loadedClass: incomingClass,
+  onClearClass,
+}: {
+  loadedClass?: SchoolClass | null;
+  onClearClass?: () => void;
+}) {
   const [subject, setSubject] = useState<Subject>("Math");
   const [grade, setGrade] = useState<Grade>("8");
   const [sols, setSols] = useState<string[]>([]);
@@ -105,11 +151,19 @@ export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb
   const [loadedStudent, setLoadedStudent] = useState<string | null>(null);
   const [loadedClass, setLoadedClass] = useState<SchoolClass | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
-  const [slidesLoading, setSlidesLoading] = useState(false);
+  const [slidesLoading, setSlidesLoading] = useState<string | null>(null); // holds the day label being built
   const [showSlides, setShowSlides] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const solsForGrade = VA_SOLS[subject][grade];
+
+  // Day sessions parsed from the generated plan
+  const sessions = useMemo(() => parseDaySessions(lessonPlan), [lessonPlan]);
+  // Everything before the first "### Day" — used as unit context for each deck
+  const unitContext = useMemo(() => {
+    const idx = lessonPlan.search(/###\s+Day\s+\d+/i);
+    return idx > 0 ? lessonPlan.slice(0, idx).trim() : "";
+  }, [lessonPlan]);
 
   function addSol(id: string) {
     if (!id || sols.includes(id) || sols.length >= 4) return;
@@ -145,20 +199,22 @@ export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb
     setLoadedStudent(studentId);
   }
 
-  function loadClass(cls: SchoolClass) {
-    setLoadedClass(cls);
+  // Apply a class loaded from the Classes tab (fires whenever the parent passes a new class object)
+  useEffect(() => {
+    if (!incomingClass) return;
+    setLoadedClass(incomingClass);
     setLoadedStudent(null);
-    setGrade(cls.grade);
-    setSubject(cls.subject);
-    const allDisabilities = [...new Set(cls.students.map((s) => s.disabilityType))];
-    setDisabilityTypes(allDisabilities);
-    const allAccommodations = [...new Set(cls.students.flatMap((s) => s.accommodations))];
-    setSelectedAccommodations(allAccommodations);
-    setStudentNeeds(`Class of ${cls.students.length} students: ${cls.students.map((s) => `${s.name} (${s.disabilityType}, reading at ${s.readingLevel})`).join("; ")}`);
-  }
-
-  // expose loadClass so parent can trigger it
-  if (onLoadClass) onLoadClass(loadClass);
+    setGrade(incomingClass.grade);
+    setSubject(incomingClass.subject);
+    setSols([]);
+    setDisabilityTypes([...new Set(incomingClass.students.map((s) => s.disabilityType))]);
+    setSelectedAccommodations([...new Set(incomingClass.students.flatMap((s) => s.accommodations))]);
+    setStudentNeeds(
+      `Class of ${incomingClass.students.length} students: ${incomingClass.students
+        .map((s) => `${s.name} (${s.disabilityType}, reading at ${s.readingLevel})`)
+        .join("; ")}`
+    );
+  }, [incomingClass]);
 
   async function generateLesson() {
     if (sols.length === 0) return;
@@ -207,20 +263,28 @@ export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb
     }
   }
 
-  async function createSlides() {
-    setSlidesLoading(true);
+  async function createSlides(session?: DaySession) {
+    const dayLabel = session?.label ?? null;
+    const content = session?.content ?? lessonPlan;
+    setSlidesLoading(dayLabel ?? "single");
     try {
       const res = await fetch("/api/generate-slides", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonPlan, grade, subject, disabilityTypes }),
+        body: JSON.stringify({
+          lessonPlan: content,
+          grade, subject, disabilityTypes,
+          dayLabel,
+          unitContext,
+        }),
       });
       const data = await res.json();
       if (data.slides) { setSlides(data.slides); setShowSlides(true); }
+      else alert("Slides could not be generated. Please try again.");
     } catch {
       alert("Error generating slides. Please try again.");
     } finally {
-      setSlidesLoading(false);
+      setSlidesLoading(null);
     }
   }
 
@@ -291,7 +355,7 @@ export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb
               <span style={{ fontSize: "0.75rem", color: "var(--gg-green)", fontWeight: 600 }}>
                 Loaded: {loadedClass.name} ({loadedClass.students.length} students)
               </span>
-              <button onClick={() => setLoadedClass(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
+              <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -437,15 +501,7 @@ export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb
           <h2 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--gg-green)", margin: 0 }}>📄 Lesson Plan</h2>
           {lessonPlan && (
             <div className="flex items-center gap-2">
-              <button onClick={createSlides} disabled={slidesLoading} style={{
-                display: "flex", alignItems: "center", gap: "5px", fontSize: "0.78rem", fontWeight: 600,
-                padding: "6px 12px", borderRadius: "20px", border: "1.5px solid var(--gg-pink)",
-                background: "var(--gg-white)", color: "var(--gg-pink)", cursor: "pointer", opacity: slidesLoading ? 0.5 : 1,
-              }}>
-                {slidesLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Presentation className="w-3.5 h-3.5" />}
-                {slidesLoading ? "Building slides..." : slides ? "Regenerate" : "Create Slides"}
-              </button>
-              {slides && !slidesLoading && (
+              {slides && slidesLoading === null && (
                 <button onClick={() => setShowSlides(true)} style={{
                   display: "flex", alignItems: "center", gap: "5px", fontSize: "0.78rem", fontWeight: 700,
                   padding: "6px 12px", borderRadius: "20px", border: "none",
@@ -464,6 +520,47 @@ export default function LessonPlanGenerator({ onLoadClass }: { onLoadClass?: (cb
             </div>
           )}
         </div>
+
+        {/* Day session → slides picker */}
+        {lessonPlan && !loading && (
+          sessions.length > 0 ? (
+            <div style={{ background: "var(--gg-green-pale)", border: "1.5px solid var(--gg-green-light)", borderRadius: "12px", padding: "12px 14px", marginBottom: "14px" }}>
+              <p style={{ margin: "0 0 8px", fontSize: "0.78rem", fontWeight: 800, color: "var(--gg-green)", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Presentation className="w-4 h-4" /> Create Smart Board slides for one class period
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {sessions.map((sess) => (
+                  <button key={sess.label} onClick={() => createSlides(sess)} disabled={slidesLoading !== null}
+                    title={sess.title}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "5px",
+                      fontSize: "0.76rem", fontWeight: 700, padding: "6px 11px", borderRadius: "18px",
+                      border: "1.5px solid var(--gg-green)", background: "var(--gg-white)",
+                      color: "var(--gg-green)", cursor: slidesLoading !== null ? "wait" : "pointer",
+                      opacity: slidesLoading !== null && slidesLoading !== sess.label ? 0.5 : 1,
+                    }}>
+                    {slidesLoading === sess.label ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Presentation className="w-3.5 h-3.5" />}
+                    {sess.label}
+                  </button>
+                ))}
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: "0.7rem", color: "var(--gg-brown-mid)" }}>
+                Each button builds a ~12-slide deck for that single day. Click a day, then press Present.
+              </p>
+            </div>
+          ) : (
+            <div style={{ marginBottom: "14px" }}>
+              <button onClick={() => createSlides()} disabled={slidesLoading !== null} style={{
+                display: "flex", alignItems: "center", gap: "5px", fontSize: "0.78rem", fontWeight: 700,
+                padding: "8px 14px", borderRadius: "20px", border: "1.5px solid var(--gg-pink)",
+                background: "var(--gg-white)", color: "var(--gg-pink)", cursor: "pointer", opacity: slidesLoading !== null ? 0.5 : 1,
+              }}>
+                {slidesLoading !== null ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Presentation className="w-3.5 h-3.5" />}
+                {slidesLoading !== null ? "Building slides..." : "Create Slides"}
+              </button>
+            </div>
+          )
+        )}
 
         {!lessonPlan && !loading && (
           <div className="flex-1 flex items-center justify-center text-center" style={{ color: "var(--gg-brown-mid)" }}>

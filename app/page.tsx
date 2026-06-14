@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import LessonPlanGenerator from "@/components/LessonPlanGenerator";
 import GoalTracker from "@/components/GoalTracker";
 import ClassManager from "@/components/ClassManager";
@@ -145,13 +145,12 @@ function GardenHeader() {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("lessons");
-  const loadClassRef = useRef<((c: SchoolClass) => void) | null>(null);
+  const [loadedClass, setLoadedClass] = useState<SchoolClass | null>(null);
 
   function handleLoadClass(cls: SchoolClass) {
-    if (loadClassRef.current) {
-      loadClassRef.current(cls);
-      setActiveTab("lessons");
-    }
+    // bump a fresh object reference each time so the generator's effect re-fires
+    setLoadedClass({ ...cls });
+    setActiveTab("lessons");
   }
 
   return (
@@ -186,11 +185,16 @@ export default function Home() {
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {activeTab === "lessons" && (
-          <LessonPlanGenerator onLoadClass={(cb) => { loadClassRef.current = cb; }} />
-        )}
-        {activeTab === "goals" && <GoalTracker />}
-        {activeTab === "classes" && <ClassManager onLoadClass={handleLoadClass} />}
+        {/* Kept mounted so generated lesson plans persist across tab switches */}
+        <div style={{ display: activeTab === "lessons" ? "block" : "none" }}>
+          <LessonPlanGenerator loadedClass={loadedClass} onClearClass={() => setLoadedClass(null)} />
+        </div>
+        <div style={{ display: activeTab === "goals" ? "block" : "none" }}>
+          <GoalTracker />
+        </div>
+        <div style={{ display: activeTab === "classes" ? "block" : "none" }}>
+          <ClassManager onLoadClass={handleLoadClass} />
+        </div>
       </main>
     </div>
   );
