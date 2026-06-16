@@ -5,6 +5,8 @@ import { VA_SOLS, DISABILITY_TYPES, ACCOMMODATIONS, DEMO_STUDENTS } from "@/lib/
 import type { SchoolClass } from "@/lib/data";
 import { Wand2, Download, Loader2, UserCheck, Presentation, X, Users } from "lucide-react";
 import SlideViewer, { type Slide } from "@/components/SlideViewer";
+import LessonHistory from "@/components/LessonHistory";
+import { saveLessonToHistory, type SavedLesson } from "@/lib/lessonHistory";
 import React from "react";
 
 type Subject = "Math" | "ELA";
@@ -279,13 +281,37 @@ export default function LessonPlanGenerator({
         }),
       });
       const data = await res.json();
-      if (data.slides) { setSlides(data.slides); setShowSlides(true); }
-      else alert("Slides could not be generated. Please try again.");
+      if (data.slides) {
+        setSlides(data.slides);
+        setShowSlides(true);
+        // Save to lesson history
+        const title = `${subject} Grade ${grade} — ${sols.length} SOL${sols.length !== 1 ? "s" : ""}`;
+        saveLessonToHistory({
+          title,
+          subject,
+          grade,
+          sols,
+          disabilityTypes,
+          className: loadedClass?.name,
+          lessonContent: lessonPlan,
+          slides: data.slides,
+        });
+      } else alert("Slides could not be generated. Please try again.");
     } catch {
       alert("Error generating slides. Please try again.");
     } finally {
       setSlidesLoading(null);
     }
+  }
+
+  function onLoadLesson(lesson: SavedLesson) {
+    setSubject(lesson.subject as Subject);
+    setGrade(lesson.grade as Grade);
+    setSols(lesson.sols);
+    setDisabilityTypes(lesson.disabilityTypes);
+    setLessonPlan(lesson.lessonContent);
+    setSlides(lesson.slides);
+    setShowSlides(true);
   }
 
   function downloadPDF() {
@@ -325,8 +351,10 @@ export default function LessonPlanGenerator({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Left: Config */}
+    <>
+      <LessonHistory onLoadLesson={onLoadLesson} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: Config */}
       <div className="gg-card p-6 space-y-5">
         <h2 style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--gg-green)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
           🌿 Configure Lesson Plan
@@ -594,6 +622,7 @@ export default function LessonPlanGenerator({
       {showSlides && slides && (
         <SlideViewer slides={slides} onClose={() => setShowSlides(false)} />
       )}
-    </div>
+      </div>
+    </>
   );
 }

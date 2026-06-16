@@ -17,7 +17,7 @@ function GardenHeader() {
     }}>
       {/* Capped-height banner: scene scales to fit (no cropping); matching beige
           background blends the letterbox so it reads as one clean banner. */}
-      <div style={{ height: "clamp(168px, 22vw, 280px)", width: "100%" }}>
+      <div style={{ height: "clamp(140px, 18vw, 220px)", width: "100%" }}>
         <GardenIllustration />
       </div>
 
@@ -32,7 +32,7 @@ function GardenHeader() {
           IEPrep
         </h1>
         <p style={{ margin: "2px 0 0", fontSize: "0.7rem", color: "var(--gg-brown-mid)", fontWeight: 600 }}>
-          Differentiated lessons · Special education
+          Individualized Education Meets Intelligent Automation
         </p>
       </div>
     </header>
