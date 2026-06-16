@@ -17,7 +17,7 @@ function GardenHeader() {
     }}>
       {/* Capped-height banner: scene scales to fit (no cropping); matching beige
           background blends the letterbox so it reads as one clean banner. */}
-      <div style={{ height: "clamp(140px, 18vw, 220px)", width: "100%" }}>
+      <div style={{ height: "clamp(120px, 15vw, 180px)", width: "100%" }}>
         <GardenIllustration />
       </div>
 
@@ -54,7 +54,7 @@ export default function Home() {
       <GardenHeader />
 
       <div style={{ background: "var(--gg-white)", borderBottom: "1.5px solid var(--gg-card-border)" }}>
-        <div className="max-w-6xl mx-auto px-4 flex gap-1 pt-2">
+        <div className="max-w-6xl mx-auto px-4 flex gap-1 pt-1 pb-0">
           {([
             { id: "lessons", label: "📖 Lesson Generator" },
             { id: "goals",   label: "🎯 Goal Tracker" },
@@ -80,7 +80,7 @@ export default function Home() {
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main className="max-w-6xl mx-auto px-4 py-3">
         {/* Kept mounted so generated lesson plans persist across tab switches */}
         <div style={{ display: activeTab === "lessons" ? "block" : "none" }}>
           <LessonPlanGenerator loadedClass={loadedClass} onClearClass={() => setLoadedClass(null)} />

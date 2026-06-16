@@ -6,6 +6,7 @@ import type { SchoolClass } from "@/lib/data";
 import { Wand2, Download, Loader2, UserCheck, Presentation, X, Users } from "lucide-react";
 import SlideViewer, { type Slide } from "@/components/SlideViewer";
 import LessonHistory from "@/components/LessonHistory";
+import AddStudentModal from "@/components/AddStudentModal";
 import { saveLessonToHistory, type SavedLesson } from "@/lib/lessonHistory";
 import React from "react";
 
@@ -155,6 +156,7 @@ export default function LessonPlanGenerator({
   const [slides, setSlides] = useState<Slide[] | null>(null);
   const [slidesLoading, setSlidesLoading] = useState<string | null>(null); // holds the day label being built
   const [showSlides, setShowSlides] = useState(false);
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const solsForGrade = VA_SOLS[subject][grade];
@@ -314,6 +316,20 @@ export default function LessonPlanGenerator({
     setShowSlides(true);
   }
 
+  function handleAddStudentToClass(updatedClass: SchoolClass) {
+    setLoadedClass(updatedClass);
+    // Save to localStorage in ClassManager's context (would be handled by parent)
+    const classesJson = localStorage.getItem("ieprep_classes");
+    if (classesJson) {
+      const classes = JSON.parse(classesJson);
+      const idx = classes.findIndex((c: SchoolClass) => c.id === updatedClass.id);
+      if (idx >= 0) {
+        classes[idx] = updatedClass;
+        localStorage.setItem("ieprep_classes", JSON.stringify(classes));
+      }
+    }
+  }
+
   function downloadPDF() {
     const win = window.open("", "_blank");
     if (!win) return;
@@ -383,7 +399,10 @@ export default function LessonPlanGenerator({
               <span style={{ fontSize: "0.75rem", color: "var(--gg-green)", fontWeight: 600 }}>
                 Loaded: {loadedClass.name} ({loadedClass.students.length} students)
               </span>
-              <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
+              <button onClick={() => setShowAddStudentModal(true)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center" }}>
+                <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
+              </button>
+              <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -623,6 +642,15 @@ export default function LessonPlanGenerator({
         <SlideViewer slides={slides} onClose={() => setShowSlides(false)} />
       )}
       </div>
+
+      {loadedClass && (
+        <AddStudentModal
+          isOpen={showAddStudentModal}
+          onClose={() => setShowAddStudentModal(false)}
+          schoolClass={loadedClass}
+          onAddStudent={handleAddStudentToClass}
+        />
+      )}
     </>
   );
 }
