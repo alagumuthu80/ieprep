@@ -416,32 +416,39 @@ export default function LessonPlanGenerator({
           ))}
         </div>
 
-        {/* Quick load — Class Mode */}
+        {/* Class Mode — Load Class */}
         {mode === "class" && (
           <div>
-            <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>SELECT CLASS</p>
-            <div className="flex gap-2 flex-wrap">
-              {DEMO_STUDENTS.map((s) => (
-                <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
-                  display: "flex", alignItems: "center", gap: "6px",
-                  padding: "6px 12px", borderRadius: "20px",
-                  border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
-                  background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
-                  color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
-                  fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
-                }}>
-                  <UserCheck className="w-3.5 h-3.5" /> Student {s.id}
-                </button>
-              ))}
-            </div>
-            {loadedClass && (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", padding: "6px 12px", background: "var(--gg-green-pale)", borderRadius: "10px", border: "1px solid var(--gg-green-light)" }}>
+            {!loadedClass ? (
+              <>
+                <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>LOAD A CLASS FROM MY CLASSES →</p>
+                <p style={{ fontSize: "0.75rem", color: "var(--gg-brown-mid)", marginBottom: "8px", lineHeight: 1.5 }}>Go to the <strong>My Classes</strong> tab to load a class. Or generate a lesson for a demo class below:</p>
+                <div className="flex gap-2 flex-wrap">
+                  {DEMO_STUDENTS.map((s) => (
+                    <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
+                      display: "flex", alignItems: "center", gap: "6px",
+                      padding: "6px 12px", borderRadius: "20px",
+                      border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
+                      background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
+                      color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
+                      fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                    }}>
+                      <UserCheck className="w-3.5 h-3.5" /> Demo: Student {s.id}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "var(--gg-green-pale)", borderRadius: "10px", border: "1px solid var(--gg-green-light)" }}>
                 <Users className="w-4 h-4" style={{ color: "var(--gg-green)" }} />
-                <span style={{ fontSize: "0.75rem", color: "var(--gg-green)", fontWeight: 600 }}>
-                  Loaded: {loadedClass.name} ({loadedClass.students.length} students)
+                <span style={{ fontSize: "0.8rem", color: "var(--gg-green)", fontWeight: 700 }}>
+                  Class: {loadedClass.name}
                 </span>
-                <button onClick={() => setShowAddStudentModal(true)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center" }}>
-                  <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
+                <span style={{ fontSize: "0.7rem", color: "var(--gg-green)", fontWeight: 600, marginLeft: "4px" }}>
+                  ({loadedClass.students.length} students)
+                </span>
+                <button onClick={() => setShowAddStudentModal(true)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center", fontSize: "1.1rem" }}>
+                  +
                 </button>
                 <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
                   <X className="w-3.5 h-3.5" />
