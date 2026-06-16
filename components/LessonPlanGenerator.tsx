@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { VA_SOLS, DISABILITY_TYPES, ACCOMMODATIONS, DEMO_STUDENTS } from "@/lib/data";
-import type { SchoolClass } from "@/lib/data";
+import { VA_SOLS, DISABILITY_TYPES, ACCOMMODATIONS, DEMO_STUDENTS, DEMO_CLASSES } from "@/lib/data";
+import type { SchoolClass, ClassStudentEntry } from "@/lib/data";
 import { Wand2, Download, Loader2, UserCheck, Presentation, X, Users } from "lucide-react";
 import SlideViewer, { type Slide } from "@/components/SlideViewer";
 import LessonHistory from "@/components/LessonHistory";
@@ -158,7 +158,23 @@ export default function LessonPlanGenerator({
   const [showSlides, setShowSlides] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [mode, setMode] = useState<"class" | "student">("class");
+  const [allClasses, setAllClasses] = useState<SchoolClass[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<ClassStudentEntry | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Load saved classes from localStorage (created on the My Classes tab)
+  function refreshClasses() {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem("ieprep_classes");
+      setAllClasses(saved ? JSON.parse(saved) : DEMO_CLASSES);
+    } catch {
+      setAllClasses(DEMO_CLASSES);
+    }
+  }
+  useEffect(() => { refreshClasses(); }, []);
+  // Refresh whenever the user switches mode so newly-created classes/students appear
+  useEffect(() => { refreshClasses(); }, [mode]);
 
   const solsForGrade = VA_SOLS[subject][grade];
 
@@ -202,6 +218,39 @@ export default function LessonPlanGenerator({
     setSelectedAccommodations(student.accommodations);
     setStudentNeeds(`Student ${studentId}: ${student.readingLevel} reading level. ${student.name}.`);
     setLoadedStudent(studentId);
+    setSelectedStudent({
+      id: student.id, name: student.name, grade: student.grade as Grade,
+      disabilityType: student.disabilityType, accommodations: student.accommodations,
+      readingLevel: student.readingLevel,
+    });
+  }
+
+  // Load a class created on the My Classes tab (Class Mode)
+  function loadClass(cls: SchoolClass) {
+    setLoadedClass(cls);
+    setLoadedStudent(null);
+    setSelectedStudent(null);
+    setGrade(cls.grade);
+    setSubject(cls.subject);
+    setSols([]);
+    setDisabilityTypes([...new Set(cls.students.map((s) => s.disabilityType))]);
+    setSelectedAccommodations([...new Set(cls.students.flatMap((s) => s.accommodations))]);
+    setStudentNeeds(
+      `Class of ${cls.students.length} students: ${cls.students
+        .map((s) => `${s.name} (${s.disabilityType}, reading at ${s.readingLevel})`)
+        .join("; ")}`
+    );
+  }
+
+  // Select one student from a class (Student Mode)
+  function selectClassStudent(student: ClassStudentEntry) {
+    setLoadedClass(null);
+    setGrade(student.grade);
+    setDisabilityTypes([student.disabilityType]);
+    setSelectedAccommodations(student.accommodations);
+    setStudentNeeds(`${student.name}: ${student.disabilityType}, reading at ${student.readingLevel}.`);
+    setLoadedStudent(student.id);
+    setSelectedStudent(student);
   }
 
   // Apply a class loaded from the Classes tab (fires whenever the parent passes a new class object)
@@ -236,16 +285,13 @@ export default function LessonPlanGenerator({
     setLoading(true);
     abortRef.current = new AbortController();
 
+    // IEP goals are only available for demo students; class students may not have any logged
     const studentGoals = loadedStudent
       ? DEMO_STUDENTS.find((s) => s.id === loadedStudent)?.goals.map((g) => ({
           area: g.area, goal: g.goal,
           progress: g.trials.length ? g.trials[g.trials.length - 1].score : "N/A",
           lastScore: g.trials.length ? g.trials[g.trials.length - 1].score : "N/A",
         }))
-      : undefined;
-
-    const studentInfo = loadedStudent
-      ? DEMO_STUDENTS.find((s) => s.id === loadedStudent)
       : undefined;
 
     try {
@@ -256,17 +302,18 @@ export default function LessonPlanGenerator({
           subject, grade,
           sols: sols.map((s) => `${subject} ${grade}.${s}`),
           weeks, duration,
-          disabilityTypes: mode === "student" && studentInfo
-            ? [studentInfo.disabilityType]
+          disabilityTypes: mode === "student" && selectedStudent
+            ? [selectedStudent.disabilityType]
             : (disabilityTypes.length ? disabilityTypes : ["General"]),
-          accommodations: mode === "student" && studentInfo
-            ? studentInfo.accommodations
+          accommodations: mode === "student" && selectedStudent
+            ? selectedStudent.accommodations
             : selectedAccommodations,
           studentNeeds,
           studentGoals,
           classStudents: mode === "class" ? loadedClass?.students : undefined,
           generationMode: mode,
           studentId: mode === "student" ? loadedStudent : undefined,
+          studentName: mode === "student" ? selectedStudent?.name : undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -416,27 +463,37 @@ export default function LessonPlanGenerator({
           ))}
         </div>
 
-        {/* Class Mode — Load Class */}
+        {/* Class Mode — pick one of your classes */}
         {mode === "class" && (
           <div>
             {!loadedClass ? (
               <>
-                <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>LOAD A CLASS FROM MY CLASSES →</p>
-                <p style={{ fontSize: "0.75rem", color: "var(--gg-brown-mid)", marginBottom: "8px", lineHeight: 1.5 }}>Go to the <strong>My Classes</strong> tab to load a class. Or generate a lesson for a demo class below:</p>
-                <div className="flex gap-2 flex-wrap">
-                  {DEMO_STUDENTS.map((s) => (
-                    <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
-                      display: "flex", alignItems: "center", gap: "6px",
-                      padding: "6px 12px", borderRadius: "20px",
-                      border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
-                      background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
-                      color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
-                      fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
-                    }}>
-                      <UserCheck className="w-3.5 h-3.5" /> Demo: Student {s.id}
-                    </button>
-                  ))}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", letterSpacing: "0.05em", margin: 0 }}>SELECT A CLASS</p>
+                  <button onClick={refreshClasses} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", fontSize: "0.7rem", fontWeight: 600 }}>↻ Refresh</button>
                 </div>
+                {allClasses.length === 0 ? (
+                  <p style={{ fontSize: "0.78rem", color: "var(--gg-brown-mid)", lineHeight: 1.5 }}>
+                    No classes yet. Go to the <strong>My Classes</strong> tab to create one.
+                  </p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {allClasses.map((cls) => (
+                      <button key={cls.id} onClick={() => loadClass(cls)} style={{
+                        display: "flex", alignItems: "center", gap: "8px", textAlign: "left",
+                        padding: "8px 12px", borderRadius: "10px",
+                        border: "1.5px solid var(--gg-card-border)", background: "var(--gg-white)",
+                        cursor: "pointer",
+                      }}>
+                        <Users className="w-4 h-4" style={{ color: "var(--gg-green)", flexShrink: 0 }} />
+                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--gg-green)" }}>{cls.name}</span>
+                        <span style={{ fontSize: "0.72rem", color: "var(--gg-brown-mid)", marginLeft: "auto" }}>
+                          {cls.subject} · Gr {cls.grade} · {cls.students.length} students
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "var(--gg-green-pale)", borderRadius: "10px", border: "1px solid var(--gg-green-light)" }}>
@@ -447,7 +504,7 @@ export default function LessonPlanGenerator({
                 <span style={{ fontSize: "0.7rem", color: "var(--gg-green)", fontWeight: 600, marginLeft: "4px" }}>
                   ({loadedClass.students.length} students)
                 </span>
-                <button onClick={() => setShowAddStudentModal(true)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center", fontSize: "1.1rem" }}>
+                <button onClick={() => setShowAddStudentModal(true)} title="Add student" style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center", fontSize: "1.1rem" }}>
                   +
                 </button>
                 <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
@@ -458,27 +515,43 @@ export default function LessonPlanGenerator({
           </div>
         )}
 
-        {/* Quick load — Student Mode */}
+        {/* Student Mode — pick one student from any of your classes */}
         {mode === "student" && (
           <div>
-            <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>SELECT STUDENT</p>
-            <div className="flex gap-2 flex-wrap">
-              {DEMO_STUDENTS.map((s) => (
-                <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
-                  display: "flex", alignItems: "center", gap: "6px",
-                  padding: "6px 12px", borderRadius: "20px",
-                  border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
-                  background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
-                  color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
-                  fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
-                }}>
-                  <UserCheck className="w-3.5 h-3.5" /> Student {s.id}
-                </button>
-              ))}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", letterSpacing: "0.05em", margin: 0 }}>SELECT A STUDENT</p>
+              <button onClick={refreshClasses} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", fontSize: "0.7rem", fontWeight: 600 }}>↻ Refresh</button>
             </div>
-            {loadedStudent && (
-              <div style={{ marginTop: "8px", padding: "8px 12px", background: "var(--gg-pink-pale)", borderRadius: "8px", border: "1px solid var(--gg-pink-light)", fontSize: "0.75rem", color: "var(--gg-brown)" }}>
-                📌 Generating lesson for Student {loadedStudent} only
+            {allClasses.every((c) => c.students.length === 0) ? (
+              <p style={{ fontSize: "0.78rem", color: "var(--gg-brown-mid)", lineHeight: 1.5 }}>
+                No students yet. Add students to a class on the <strong>My Classes</strong> tab.
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "240px", overflowY: "auto" }}>
+                {allClasses.filter((c) => c.students.length > 0).map((cls) => (
+                  <div key={cls.id}>
+                    <p style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "4px" }}>{cls.name} · {cls.subject} Gr {cls.grade}</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {cls.students.map((s) => (
+                        <button key={s.id} onClick={() => selectClassStudent(s)} style={{
+                          display: "flex", alignItems: "center", gap: "6px",
+                          padding: "6px 12px", borderRadius: "20px",
+                          border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
+                          background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
+                          color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
+                          fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                        }}>
+                          <UserCheck className="w-3.5 h-3.5" /> {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {loadedStudent && selectedStudent && (
+              <div style={{ marginTop: "10px", padding: "8px 12px", background: "var(--gg-pink-pale)", borderRadius: "8px", border: "1px solid var(--gg-pink-light)", fontSize: "0.75rem", color: "var(--gg-brown)" }}>
+                📌 Personalized lesson for <strong>{selectedStudent.name}</strong> — {selectedStudent.disabilityType}, reading at {selectedStudent.readingLevel}
               </div>
             )}
           </div>
