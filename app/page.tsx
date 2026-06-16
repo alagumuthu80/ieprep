@@ -11,27 +11,29 @@ type Tab = "lessons" | "goals" | "classes";
 
 function GardenHeader() {
   return (
-    <header style={{ position: "relative", background: "#f5ead6", overflow: "hidden" }}>
-      <GardenIllustration />
+    <header style={{
+      position: "relative", background: "#f5ead6",
+      borderBottom: "1.5px solid var(--gg-card-border)", overflow: "hidden",
+    }}>
+      {/* Capped-height banner: scene scales to fit (no cropping); matching beige
+          background blends the letterbox so it reads as one clean banner. */}
+      <div style={{ height: "clamp(168px, 22vw, 280px)", width: "100%" }}>
+        <GardenIllustration />
+      </div>
 
-      {/* App name overlay */}
+      {/* App name overlay — tucked in the corner, clear of the calendar card */}
       <div style={{
-        position: "absolute", top: 0, left: 0,
-        display: "flex", alignItems: "flex-start",
-        padding: "clamp(12px, 2.5vw, 28px)"
+        position: "absolute", top: "clamp(12px, 2vw, 22px)", left: "clamp(12px, 3vw, 36px)",
+        background: "rgba(255,253,247,0.92)", borderRadius: "14px",
+        border: "1.5px solid var(--gg-card-border)", padding: "9px 18px",
+        boxShadow: "3px 4px 0px var(--gg-beige-dark)", backdropFilter: "blur(2px)",
       }}>
-        <div style={{
-          background: "rgba(255,253,247,0.9)", borderRadius: "14px",
-          border: "1.5px solid var(--gg-card-border)", padding: "10px 20px",
-          boxShadow: "3px 4px 0px var(--gg-beige-dark)"
-        }}>
-          <h1 style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800, color: "var(--gg-green)", lineHeight: 1.1, letterSpacing: "-0.5px" }}>
-            IEPrep
-          </h1>
-          <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--gg-brown-mid)", fontWeight: 500 }}>
-            Differentiated lessons · Special education
-          </p>
-        </div>
+        <h1 style={{ margin: 0, fontSize: "clamp(1.25rem, 2.2vw, 1.6rem)", fontWeight: 800, color: "var(--gg-green)", lineHeight: 1.05, letterSpacing: "-0.5px" }}>
+          IEPrep
+        </h1>
+        <p style={{ margin: "2px 0 0", fontSize: "0.7rem", color: "var(--gg-brown-mid)", fontWeight: 600 }}>
+          Differentiated lessons · Special education
+        </p>
       </div>
     </header>
   );

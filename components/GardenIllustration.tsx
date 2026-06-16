@@ -123,7 +123,8 @@ export default function GardenIllustration({ className }: { className?: string }
 
   return (
     <svg viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg" className={className}
-      style={{ display: "block", width: "100%", height: "auto" }} role="img"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: "block", width: "100%", height: "100%" }} role="img"
       aria-label="Paper-cut garden scene with suns, hills, flowers, a tree, a fence and a welcome sign">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&display=swap');
