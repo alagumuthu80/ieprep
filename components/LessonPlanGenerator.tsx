@@ -157,6 +157,7 @@ export default function LessonPlanGenerator({
   const [slidesLoading, setSlidesLoading] = useState<string | null>(null); // holds the day label being built
   const [showSlides, setShowSlides] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [mode, setMode] = useState<"class" | "student">("class");
   const abortRef = useRef<AbortController | null>(null);
 
   const solsForGrade = VA_SOLS[subject][grade];
@@ -222,6 +223,15 @@ export default function LessonPlanGenerator({
 
   async function generateLesson() {
     if (sols.length === 0) return;
+    if (mode === "class" && !loadedClass) {
+      alert("Please load a class first");
+      return;
+    }
+    if (mode === "student" && !loadedStudent) {
+      alert("Please select a student first");
+      return;
+    }
+
     setLessonPlan("");
     setLoading(true);
     abortRef.current = new AbortController();
@@ -234,6 +244,10 @@ export default function LessonPlanGenerator({
         }))
       : undefined;
 
+    const studentInfo = loadedStudent
+      ? DEMO_STUDENTS.find((s) => s.id === loadedStudent)
+      : undefined;
+
     try {
       const res = await fetch("/api/generate-lesson", {
         method: "POST",
@@ -242,11 +256,17 @@ export default function LessonPlanGenerator({
           subject, grade,
           sols: sols.map((s) => `${subject} ${grade}.${s}`),
           weeks, duration,
-          disabilityTypes: disabilityTypes.length ? disabilityTypes : ["General"],
-          accommodations: selectedAccommodations,
+          disabilityTypes: mode === "student" && studentInfo
+            ? [studentInfo.disabilityType]
+            : (disabilityTypes.length ? disabilityTypes : ["General"]),
+          accommodations: mode === "student" && studentInfo
+            ? studentInfo.accommodations
+            : selectedAccommodations,
           studentNeeds,
           studentGoals,
-          classStudents: loadedClass?.students,
+          classStudents: mode === "class" ? loadedClass?.students : undefined,
+          generationMode: mode,
+          studentId: mode === "student" ? loadedStudent : undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -376,38 +396,86 @@ export default function LessonPlanGenerator({
           🌿 Configure Lesson Plan
         </h2>
 
-        {/* Quick load */}
-        <div>
-          <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>QUICK LOAD — DEMO STUDENTS</p>
-          <div className="flex gap-2 flex-wrap">
-            {DEMO_STUDENTS.map((s) => (
-              <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
-                display: "flex", alignItems: "center", gap: "6px",
-                padding: "6px 12px", borderRadius: "20px",
-                border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
-                background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
-                color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
-                fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
-              }}>
-                <UserCheck className="w-3.5 h-3.5" /> Student {s.id}
-              </button>
-            ))}
-          </div>
-          {loadedClass && (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", padding: "6px 12px", background: "var(--gg-green-pale)", borderRadius: "10px", border: "1px solid var(--gg-green-light)" }}>
-              <Users className="w-4 h-4" style={{ color: "var(--gg-green)" }} />
-              <span style={{ fontSize: "0.75rem", color: "var(--gg-green)", fontWeight: 600 }}>
-                Loaded: {loadedClass.name} ({loadedClass.students.length} students)
-              </span>
-              <button onClick={() => setShowAddStudentModal(true)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center" }}>
-                <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
-              </button>
-              <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+        {/* Mode toggle */}
+        <div style={{ display: "flex", gap: "8px", background: "var(--gg-beige-pale)", padding: "4px", borderRadius: "8px" }}>
+          {(["class", "student"] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setSols([]); setLoadedClass(null); setLoadedStudent(null); }}
+              style={{
+                flex: 1, padding: "8px 12px", borderRadius: "6px", border: "none",
+                background: mode === m ? "var(--gg-white)" : "transparent",
+                color: mode === m ? "var(--gg-green)" : "var(--gg-brown-mid)",
+                fontWeight: mode === m ? 700 : 600,
+                fontSize: "0.8rem", cursor: "pointer", transition: "all 0.15s",
+                borderBottom: mode === m ? "2px solid var(--gg-green)" : "none",
+              }}
+            >
+              {m === "class" ? "📚 Class Mode" : "👤 Student Mode"}
+            </button>
+          ))}
         </div>
+
+        {/* Quick load — Class Mode */}
+        {mode === "class" && (
+          <div>
+            <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>SELECT CLASS</p>
+            <div className="flex gap-2 flex-wrap">
+              {DEMO_STUDENTS.map((s) => (
+                <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "6px 12px", borderRadius: "20px",
+                  border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
+                  background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
+                  color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
+                  fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                }}>
+                  <UserCheck className="w-3.5 h-3.5" /> Student {s.id}
+                </button>
+              ))}
+            </div>
+            {loadedClass && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", padding: "6px 12px", background: "var(--gg-green-pale)", borderRadius: "10px", border: "1px solid var(--gg-green-light)" }}>
+                <Users className="w-4 h-4" style={{ color: "var(--gg-green)" }} />
+                <span style={{ fontSize: "0.75rem", color: "var(--gg-green)", fontWeight: 600 }}>
+                  Loaded: {loadedClass.name} ({loadedClass.students.length} students)
+                </span>
+                <button onClick={() => setShowAddStudentModal(true)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "0 4px", display: "flex", alignItems: "center" }}>
+                  <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span>
+                </button>
+                <button onClick={() => { setLoadedClass(null); onClearClass?.(); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)" }}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Quick load — Student Mode */}
+        {mode === "student" && (
+          <div>
+            <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "6px", letterSpacing: "0.05em" }}>SELECT STUDENT</p>
+            <div className="flex gap-2 flex-wrap">
+              {DEMO_STUDENTS.map((s) => (
+                <button key={s.id} onClick={() => loadDemoStudent(s.id)} style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "6px 12px", borderRadius: "20px",
+                  border: loadedStudent === s.id ? "1.5px solid var(--gg-green)" : "1.5px solid var(--gg-card-border)",
+                  background: loadedStudent === s.id ? "var(--gg-green-pale)" : "var(--gg-white)",
+                  color: loadedStudent === s.id ? "var(--gg-green)" : "var(--gg-brown-mid)",
+                  fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
+                }}>
+                  <UserCheck className="w-3.5 h-3.5" /> Student {s.id}
+                </button>
+              ))}
+            </div>
+            {loadedStudent && (
+              <div style={{ marginTop: "8px", padding: "8px 12px", background: "var(--gg-pink-pale)", borderRadius: "8px", border: "1px solid var(--gg-pink-light)", fontSize: "0.75rem", color: "var(--gg-brown)" }}>
+                📌 Generating lesson for Student {loadedStudent} only
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Subject + Grade */}
         <div className="grid grid-cols-2 gap-3">
@@ -529,12 +597,12 @@ export default function LessonPlanGenerator({
             className="gg-input w-full px-3 py-2 text-sm resize-none" />
         </div>
 
-        <button onClick={generateLesson} disabled={sols.length === 0 || loading}
+        <button onClick={generateLesson} disabled={sols.length === 0 || loading || (mode === "class" && !loadedClass) || (mode === "student" && !loadedStudent)}
           style={{
             ...btnBase, width: "100%",
-            background: (sols.length === 0 || loading) ? "var(--gg-beige-dark)" : "var(--gg-green)",
+            background: (sols.length === 0 || loading || (mode === "class" && !loadedClass) || (mode === "student" && !loadedStudent)) ? "var(--gg-beige-dark)" : "var(--gg-green)",
             color: (sols.length === 0 || loading) ? "var(--gg-brown-mid)" : "white",
-            boxShadow: (sols.length === 0 || loading) ? "none" : "3px 4px 0px #2E5A18",
+            boxShadow: (sols.length === 0 || loading || (mode === "class" && !loadedClass) || (mode === "student" && !loadedStudent)) ? "none" : "3px 4px 0px #2E5A18",
             cursor: (sols.length === 0 || loading) ? "not-allowed" : "pointer",
           }}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
