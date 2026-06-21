@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DISABILITY_TYPES, ACCOMMODATIONS, DEMO_CLASSES } from "@/lib/data";
-import type { SchoolClass, ClassStudentEntry, Grade, Subject } from "@/lib/data";
-import { Plus, Trash2, Users, ChevronDown, ChevronUp, BookOpen } from "lucide-react";
+import { DISABILITY_TYPES, ACCOMMODATIONS, DEMO_CLASSES, GOAL_AREAS } from "@/lib/data";
+import type { SchoolClass, ClassStudentEntry, StudentGoal, Grade, Subject } from "@/lib/data";
+import { Plus, Trash2, Users, ChevronDown, ChevronUp, BookOpen, Target } from "lucide-react";
+
+type GoalDraft = { area: string; goal: string; targetDate: string };
 
 const STORAGE_KEY = "ieprep_classes";
 
@@ -45,6 +47,17 @@ export default function ClassManager({ onLoadClass }: Props) {
   const [newStudentDisability, setNewStudentDisability] = useState(DISABILITY_TYPES[0]);
   const [newStudentAccommodations, setNewStudentAccommodations] = useState<string[]>([]);
   const [newStudentReading, setNewStudentReading] = useState("On grade level");
+  const [newStudentGoals, setNewStudentGoals] = useState<GoalDraft[]>([]);
+
+  function addGoalDraft() {
+    setNewStudentGoals((g) => [...g, { area: GOAL_AREAS[0], goal: "", targetDate: "" }]);
+  }
+  function updateGoalDraft(i: number, patch: Partial<GoalDraft>) {
+    setNewStudentGoals((g) => g.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  }
+  function removeGoalDraft(i: number) {
+    setNewStudentGoals((g) => g.filter((_, idx) => idx !== i));
+  }
 
   useEffect(() => {
     setClasses(loadClasses());
@@ -76,6 +89,15 @@ export default function ClassManager({ onLoadClass }: Props) {
 
   function addStudent(classId: string) {
     if (!newStudentName.trim()) return;
+    const cleanGoals: StudentGoal[] = newStudentGoals
+      .filter((g) => g.goal.trim())
+      .map((g, i) => ({
+        id: `goal_${Date.now()}_${i}`,
+        area: g.area,
+        goal: g.goal.trim(),
+        targetDate: g.targetDate || undefined,
+        trials: [],
+      }));
     const student: ClassStudentEntry = {
       id: `stu_${Date.now()}`,
       name: newStudentName.trim(),
@@ -83,13 +105,14 @@ export default function ClassManager({ onLoadClass }: Props) {
       disabilityType: newStudentDisability,
       accommodations: newStudentAccommodations,
       readingLevel: newStudentReading,
+      ...(cleanGoals.length ? { goals: cleanGoals } : {}),
     };
     const updated = classes.map((c) =>
       c.id === classId ? { ...c, students: [...c.students, student] } : c
     );
     setClasses(updated);
     saveClasses(updated);
-    setNewStudentName(""); setNewStudentAccommodations([]);
+    setNewStudentName(""); setNewStudentAccommodations([]); setNewStudentGoals([]);
     setShowAddStudent(null);
   }
 
@@ -288,6 +311,40 @@ export default function ClassManager({ onLoadClass }: Props) {
                               style={{ accentColor: "var(--gg-green)" }} />
                             {acc}
                           </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.72rem", fontWeight: 700, color: "var(--gg-brown-mid)" }}>
+                          <Target size={13} /> IEP Goals <span style={{ fontWeight: 400 }}>(optional)</span>
+                        </label>
+                        <button type="button" onClick={addGoalDraft} style={{
+                          display: "flex", alignItems: "center", gap: "3px", background: "var(--gg-green-pale)", color: "var(--gg-green)",
+                          border: "1px solid var(--gg-green-light)", borderRadius: "6px", padding: "3px 8px", fontSize: "0.7rem", fontWeight: 700, cursor: "pointer",
+                        }}><Plus size={11} /> Add goal</button>
+                      </div>
+                      {newStudentGoals.length === 0 && (
+                        <p style={{ fontSize: "0.7rem", color: "var(--gg-brown-mid)", margin: 0 }}>
+                          Add measurable IEP goals so lessons can target them. Progress trials are logged later.
+                        </p>
+                      )}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {newStudentGoals.map((g, i) => (
+                          <div key={i} style={{ border: "1px solid var(--gg-card-border)", borderRadius: "8px", padding: "7px", background: "var(--gg-beige-pale)" }}>
+                            <div style={{ display: "flex", gap: "6px", marginBottom: "5px" }}>
+                              <select value={g.area} onChange={(e) => updateGoalDraft(i, { area: e.target.value })} style={{ ...ggInput, flex: 1 }}>
+                                {GOAL_AREAS.map((a) => <option key={a}>{a}</option>)}
+                              </select>
+                              <input type="date" value={g.targetDate} onChange={(e) => updateGoalDraft(i, { targetDate: e.target.value })} style={{ ...ggInput, width: "140px" }} title="Target date" />
+                              <button type="button" onClick={() => removeGoalDraft(i)} aria-label="Remove goal" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-pink)" }}>
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                            <textarea value={g.goal} onChange={(e) => updateGoalDraft(i, { goal: e.target.value })} rows={2}
+                              placeholder="e.g., Given grade-level text, the student will identify the main idea and 2 details with 80% accuracy across 3 consecutive trials."
+                              style={{ ...ggInput, width: "100%", resize: "vertical" }} />
+                          </div>
                         ))}
                       </div>
                     </div>
