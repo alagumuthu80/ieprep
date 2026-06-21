@@ -1,8 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DEMO_STUDENTS, getProgressLevel, daysUntilDate } from "@/lib/data";
-import { TrendingUp, AlertTriangle, CheckCircle, Loader2, Brain } from "lucide-react";
+import type { SchoolClass, StudentGoal } from "@/lib/data";
+import { TrendingUp, AlertTriangle, CheckCircle, Loader2, Brain, RefreshCw } from "lucide-react";
+
+type TrackedStudent = {
+  id: string;
+  name: string;
+  grade: string;
+  disabilityType: string;
+  accommodations: string[];
+  readingLevel: string;
+  goals: StudentGoal[];
+  classId?: string | null; // null = demo student (in-memory only)
+};
+
+// Build the tracked-student list: real students (from saved classes) that have
+// goals, plus the demo students. Real students win on id collisions.
+function loadTrackedStudents(): TrackedStudent[] {
+  const fromClasses: TrackedStudent[] = [];
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem("ieprep_classes") : null;
+    const classes: SchoolClass[] = raw ? JSON.parse(raw) : [];
+    for (const c of classes) {
+      for (const s of c.students || []) {
+        if (s.goals && s.goals.length) {
+          fromClasses.push({
+            id: s.id, name: s.name, grade: s.grade,
+            disabilityType: s.disabilityType, accommodations: s.accommodations,
+            readingLevel: s.readingLevel, goals: s.goals, classId: c.id,
+          });
+        }
+      }
+    }
+  } catch { /* ignore parse errors */ }
+  const ids = new Set(fromClasses.map((s) => s.id));
+  const demos: TrackedStudent[] = (DEMO_STUDENTS as unknown as TrackedStudent[])
+    .filter((d) => !ids.has(d.id))
+    .map((d) => ({ ...d, classId: null }));
+  return [...fromClasses, ...demos];
+}
 
 const SCORE_PILL: Record<string, { bg: string; color: string; border: string }> = {
   "1/4": { bg:"#FDEAEA", color:"#A32D2D", border:"#F09595" },
@@ -21,46 +59,59 @@ const PROGRESS_CONFIG = {
 type TrialScore = "1/4" | "2/4" | "3/4" | "4/4";
 
 export default function GoalTracker() {
-  const [students, setStudents] = useState(DEMO_STUDENTS);
-  const [selectedStudentId, setSelectedStudentId] = useState(DEMO_STUDENTS[0].id);
+  const [students, setStudents] = useState<TrackedStudent[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [aiSuggestions, setAiSuggestions] = useState<string>("");
   const [loadingAI, setLoadingAI] = useState(false);
   const [newTrials, setNewTrials] = useState<Record<string, { score: TrialScore; notes: string }>>({});
 
-  const student = students.find((s) => s.id === selectedStudentId)!;
+  function refresh() {
+    const list = loadTrackedStudents();
+    setStudents(list);
+    setSelectedStudentId((cur) => (list.some((s) => s.id === cur) ? cur : (list[0]?.id ?? "")));
+  }
+  useEffect(() => { refresh(); }, []);
+
+  const student = students.find((s) => s.id === selectedStudentId);
+
+  // Persist a student's updated goals back to localStorage (real students only).
+  function persistStudentGoals(classId: string | null | undefined, studentId: string, goals: StudentGoal[]) {
+    if (!classId) return;
+    try {
+      const raw = localStorage.getItem("ieprep_classes");
+      const classes: SchoolClass[] = raw ? JSON.parse(raw) : [];
+      const updated = classes.map((c) =>
+        c.id !== classId ? c : { ...c, students: c.students.map((s) => (s.id !== studentId ? s : { ...s, goals })) }
+      );
+      localStorage.setItem("ieprep_classes", JSON.stringify(updated));
+    } catch { /* ignore */ }
+  }
 
   function addTrial(goalId: string) {
     const trial = newTrials[goalId];
-    if (!trial?.score) return;
+    if (!trial?.score || !student) return;
+
+    const updatedGoals = student.goals.map((g) =>
+      g.id !== goalId
+        ? g
+        : {
+            ...g,
+            trials: [
+              ...g.trials,
+              { date: new Date().toISOString().split("T")[0], score: trial.score, notes: trial.notes || "" },
+            ],
+          }
+    );
 
     setStudents((prev) =>
-      prev.map((s) =>
-        s.id !== selectedStudentId
-          ? s
-          : {
-              ...s,
-              goals: s.goals.map((g) =>
-                g.id !== goalId
-                  ? g
-                  : {
-                      ...g,
-                      trials: [
-                        ...g.trials,
-                        {
-                          date: new Date().toISOString().split("T")[0],
-                          score: trial.score,
-                          notes: trial.notes || "",
-                        },
-                      ],
-                    }
-              ),
-            }
-      )
+      prev.map((s) => (s.id !== selectedStudentId ? s : { ...s, goals: updatedGoals }))
     );
+    persistStudentGoals(student.classId, student.id, updatedGoals);
     setNewTrials((prev) => ({ ...prev, [goalId]: { score: "1/4", notes: "" } }));
   }
 
   async function getAISuggestions() {
+    if (!student) return;
     setAiSuggestions("");
     setLoadingAI(true);
 
@@ -117,10 +168,12 @@ export default function GoalTracker() {
     borderRadius:"10px", color:"var(--gg-brown)", fontSize:"0.83rem", padding:"6px 10px",
   };
 
+  const isDemoId = (id: string) => /^\d+$/.test(id);
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:"20px" }}>
       {/* Student selector */}
-      <div style={{ display:"flex", gap:"10px" }}>
+      <div style={{ display:"flex", gap:"10px", alignItems:"center", flexWrap:"wrap" }}>
         {students.map((s) => (
           <button
             key={s.id}
@@ -134,11 +187,30 @@ export default function GoalTracker() {
               boxShadow: selectedStudentId === s.id ? "2px 3px 0px #2E5A18" : "2px 3px 0px var(--gg-beige-dark)",
             }}
           >
-            🌱 {s.name} <span style={{ opacity:0.6 }}>#{s.id}</span>
+            🌱 {s.name}{isDemoId(s.id) && <span style={{ opacity:0.6 }}> #{s.id}</span>}
           </button>
         ))}
+        <button
+          onClick={refresh}
+          title="Refresh students from My Classes"
+          style={{ display:"flex", alignItems:"center", gap:"5px", padding:"7px 12px", borderRadius:"22px",
+            border:"1.5px solid var(--gg-card-border)", background:"var(--gg-white)", color:"var(--gg-green)",
+            fontWeight:600, fontSize:"0.78rem", cursor:"pointer" }}
+        >
+          <RefreshCw size={13} /> Refresh
+        </button>
       </div>
 
+      {!student && (
+        <div className="gg-card" style={{ padding:"28px 20px", textAlign:"center" }}>
+          <p style={{ margin:0, fontSize:"0.92rem", fontWeight:700, color:"var(--gg-brown)" }}>No students with goals yet</p>
+          <p style={{ margin:"6px 0 0", fontSize:"0.82rem", color:"var(--gg-brown-mid)" }}>
+            Go to <strong>My Classes</strong>, add or edit a student, and give them an IEP goal — then hit Refresh here.
+          </p>
+        </div>
+      )}
+
+      {student && (<>
       {/* Student info card */}
       <div className="gg-card" style={{ padding:"18px 20px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
@@ -160,7 +232,7 @@ export default function GoalTracker() {
           <div style={{ textAlign:"right", display:"flex", flexDirection:"column", gap:"4px" }}>
             {student.goals.map((g) => {
               const days = daysUntilDate(g.targetDate);
-              if (days <= 60) return (
+              if (days !== null && days <= 60) return (
                 <div key={g.id} style={{ display:"flex", alignItems:"center", gap:"4px", fontSize:"0.75rem", color: days <= 30 ? "#A32D2D" : "#854F0B", background: days <= 30 ? "#FDEAEA" : "#FFF3D6", borderRadius:"12px", padding:"3px 10px" }}>
                   <AlertTriangle className="w-3 h-3" />
                   {g.area}: {days}d left
@@ -194,8 +266,8 @@ export default function GoalTracker() {
               <div>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:"0.72rem", marginBottom:"5px" }}>
                   <span style={{ fontWeight:700, color:"var(--gg-brown-mid)" }}>{config.label}</span>
-                  <span style={{ color: days <= 30 ? "#A32D2D" : days <= 60 ? "#854F0B" : "var(--gg-brown-mid)" }}>
-                    {goal.targetDate} ({days}d)
+                  <span style={{ color: days !== null && days <= 30 ? "#A32D2D" : days !== null && days <= 60 ? "#854F0B" : "var(--gg-brown-mid)" }}>
+                    {goal.targetDate ? `${goal.targetDate} (${days}d)` : "No target date"}
                   </span>
                 </div>
                 <div style={{ width:"100%", background:"var(--gg-beige-dark)", borderRadius:"99px", height:"10px" }}>
@@ -289,6 +361,7 @@ export default function GoalTracker() {
           </div>
         )}
       </div>
+      </>)}
     </div>
   );
 }

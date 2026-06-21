@@ -280,7 +280,8 @@ export function getProgressLevel(trials: { score: string }[]): "emerging" | "dev
   return "emerging";
 }
 
-export function daysUntilDate(dateStr: string): number {
+export function daysUntilDate(dateStr?: string): number | null {
+  if (!dateStr) return null;
   const target = new Date(dateStr);
   const today = new Date();
   return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
