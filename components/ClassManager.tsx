@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { DISABILITY_TYPES, ACCOMMODATIONS, DEMO_CLASSES, GOAL_AREAS } from "@/lib/data";
 import type { SchoolClass, ClassStudentEntry, StudentGoal, Grade, Subject } from "@/lib/data";
-import { Plus, Trash2, Users, ChevronDown, ChevronUp, BookOpen, Target } from "lucide-react";
+import { Plus, Trash2, Users, ChevronDown, ChevronUp, BookOpen, Target, Pencil } from "lucide-react";
 
 type GoalDraft = { area: string; goal: string; targetDate: string };
 
@@ -48,6 +48,25 @@ export default function ClassManager({ onLoadClass }: Props) {
   const [newStudentAccommodations, setNewStudentAccommodations] = useState<string[]>([]);
   const [newStudentReading, setNewStudentReading] = useState("On grade level");
   const [newStudentGoals, setNewStudentGoals] = useState<GoalDraft[]>([]);
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+
+  function resetStudentForm() {
+    setNewStudentName(""); setNewStudentGrade("8");
+    setNewStudentDisability(DISABILITY_TYPES[0]);
+    setNewStudentAccommodations([]); setNewStudentReading("On grade level");
+    setNewStudentGoals([]); setEditingStudentId(null);
+  }
+
+  function startEditStudent(classId: string, stu: ClassStudentEntry) {
+    setNewStudentName(stu.name);
+    setNewStudentGrade(stu.grade);
+    setNewStudentDisability(stu.disabilityType);
+    setNewStudentAccommodations(stu.accommodations);
+    setNewStudentReading(stu.readingLevel);
+    setNewStudentGoals((stu.goals ?? []).map((g) => ({ area: g.area, goal: g.goal, targetDate: g.targetDate ?? "" })));
+    setEditingStudentId(stu.id);
+    setShowAddStudent(classId);
+  }
 
   function addGoalDraft() {
     setNewStudentGoals((g) => [...g, { area: GOAL_AREAS[0], goal: "", targetDate: "" }]);
@@ -98,21 +117,54 @@ export default function ClassManager({ onLoadClass }: Props) {
         targetDate: g.targetDate || undefined,
         trials: [],
       }));
-    const student: ClassStudentEntry = {
-      id: `stu_${Date.now()}`,
-      name: newStudentName.trim(),
-      grade: newStudentGrade,
-      disabilityType: newStudentDisability,
-      accommodations: newStudentAccommodations,
-      readingLevel: newStudentReading,
-      ...(cleanGoals.length ? { goals: cleanGoals } : {}),
-    };
-    const updated = classes.map((c) =>
-      c.id === classId ? { ...c, students: [...c.students, student] } : c
-    );
+
+    const updated = classes.map((c) => {
+      if (c.id !== classId) return c;
+      if (editingStudentId) {
+        // Update an existing student, preserving id and any logged trials per goal area.
+        const students = c.students.map((s) => {
+          if (s.id !== editingStudentId) return s;
+          const prevGoals = s.goals ?? [];
+          const mergedGoals: StudentGoal[] = newStudentGoals
+            .filter((g) => g.goal.trim())
+            .map((g, i) => {
+              const prior = prevGoals.find((pg) => pg.area === g.area && pg.goal === g.goal.trim());
+              return {
+                id: prior?.id ?? `goal_${Date.now()}_${i}`,
+                area: g.area,
+                goal: g.goal.trim(),
+                targetDate: g.targetDate || undefined,
+                trials: prior?.trials ?? [],
+              };
+            });
+          return {
+            ...s,
+            name: newStudentName.trim(),
+            grade: newStudentGrade,
+            disabilityType: newStudentDisability,
+            accommodations: newStudentAccommodations,
+            readingLevel: newStudentReading,
+            ...(mergedGoals.length ? { goals: mergedGoals } : { goals: undefined }),
+          };
+        });
+        return { ...c, students };
+      }
+      // Add a new student
+      const student: ClassStudentEntry = {
+        id: `stu_${Date.now()}`,
+        name: newStudentName.trim(),
+        grade: newStudentGrade,
+        disabilityType: newStudentDisability,
+        accommodations: newStudentAccommodations,
+        readingLevel: newStudentReading,
+        ...(cleanGoals.length ? { goals: cleanGoals } : {}),
+      };
+      return { ...c, students: [...c.students, student] };
+    });
+
     setClasses(updated);
     saveClasses(updated);
-    setNewStudentName(""); setNewStudentAccommodations([]); setNewStudentGoals([]);
+    resetStudentForm();
     setShowAddStudent(null);
   }
 
@@ -272,8 +324,21 @@ export default function ClassManager({ onLoadClass }: Props) {
                             </span>
                           ))}
                         </div>
+                        {stu.goals && stu.goals.length > 0 && (
+                          <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "3px" }}>
+                            {stu.goals.map((g) => (
+                              <div key={g.id} style={{ display: "flex", alignItems: "flex-start", gap: "5px", fontSize: "0.7rem", color: "var(--gg-brown)" }}>
+                                <Target size={11} style={{ marginTop: "2px", color: "var(--gg-pink)", flexShrink: 0 }} />
+                                <span><strong style={{ color: "var(--gg-pink)" }}>{g.area}:</strong> {g.goal}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <button onClick={() => removeStudent(cls.id, stu.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-brown-mid)", padding: "2px" }}>
+                      <button onClick={() => startEditStudent(cls.id, stu)} title="Edit student & goals" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-green)", padding: "2px" }}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => removeStudent(cls.id, stu.id)} title="Remove student" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-brown-mid)", padding: "2px" }}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -284,7 +349,7 @@ export default function ClassManager({ onLoadClass }: Props) {
               {/* Add student button / form */}
               {showAddStudent === cls.id ? (
                 <div style={{ background: "var(--gg-white)", borderRadius: "12px", border: "1.5px solid var(--gg-card-border)", padding: "14px" }}>
-                  <h4 style={{ margin: "0 0 12px", fontSize: "0.85rem", fontWeight: 800, color: "var(--gg-brown)" }}>Add Student</h4>
+                  <h4 style={{ margin: "0 0 12px", fontSize: "0.85rem", fontWeight: 800, color: "var(--gg-brown)" }}>{editingStudentId ? "Edit Student" : "Add Student"}</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
                     <div>
                       <label style={{ display: "block", fontSize: "0.72rem", fontWeight: 700, color: "var(--gg-brown-mid)", marginBottom: "2px" }}>Name *</label>
@@ -355,8 +420,8 @@ export default function ClassManager({ onLoadClass }: Props) {
                       background: newStudentName.trim() ? "var(--gg-green)" : "var(--gg-beige-dark)",
                       color: newStudentName.trim() ? "white" : "var(--gg-brown-mid)",
                       fontWeight: 700, fontSize: "0.8rem", cursor: newStudentName.trim() ? "pointer" : "not-allowed",
-                    }}>Add Student</button>
-                    <button onClick={() => setShowAddStudent(null)} style={{
+                    }}>{editingStudentId ? "Save Changes" : "Add Student"}</button>
+                    <button onClick={() => { resetStudentForm(); setShowAddStudent(null); }} style={{
                       padding: "7px 16px", borderRadius: "20px", border: "1.5px solid var(--gg-card-border)",
                       background: "var(--gg-white)", color: "var(--gg-brown-mid)",
                       fontWeight: 600, fontSize: "0.8rem", cursor: "pointer",
@@ -364,7 +429,7 @@ export default function ClassManager({ onLoadClass }: Props) {
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setShowAddStudent(cls.id)} style={{
+                <button onClick={() => { resetStudentForm(); setShowAddStudent(cls.id); }} style={{
                   display: "flex", alignItems: "center", gap: "6px",
                   padding: "8px 16px", borderRadius: "20px",
                   border: "1.5px dashed var(--gg-green-light)", background: "var(--gg-green-pale)",
