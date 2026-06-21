@@ -87,6 +87,45 @@ export const ACCOMMODATIONS = [
   "Preferential seating",
 ];
 
+// Instruction-focused guidance fed to the lesson generator so the AI designs
+// AROUND each disability and accommodation instead of just naming the label.
+// Keyed by the exact strings above. (Reviewed for plain-language accuracy; not clinical advice.)
+export const DISABILITY_GUIDANCE: Record<string, string> = {
+  "SLD (Specific Learning Disability)":
+    "Processes academic content unevenly — often reads, writes, or computes well below grade level despite average reasoning. Break tasks into small steps, pre-teach vocabulary, give worked examples and models, and reduce reading/writing load while keeping the thinking at grade level.",
+  "EBD (Emotional Behavioral Disorder)":
+    "Emotional regulation and behavior can interrupt learning. Use predictable routines, clear expectations, frequent specific praise, choices, and low-stakes ways to participate. Plan calm-down options and refocus cues; avoid public correction.",
+  "ID (Intellectual Disability)":
+    "Learns more slowly and needs concepts made concrete and functional. Teach fewer objectives in smaller steps, use manipulatives and real-life examples, repeat and review often, and connect skills to daily living.",
+  "ASD (Autism Spectrum Disorder)":
+    "Benefits from predictability, explicit social/communication support, and sensory awareness. Use visual schedules, literal and concrete language, clearly signposted routines and transitions, and honor sensory needs. Make implicit expectations explicit.",
+  "OHI/ADHD (Other Health Impairment)":
+    "Attention, focus, and stamina vary through a lesson. Use short activity chunks, movement and brain breaks, timers, single-step directions, and a low-distraction setup. Check in frequently and allow extra processing time.",
+  "Speech/Language Impairment":
+    "Receptive and/or expressive language may lag. Simplify language, pair words with visuals, allow extra response time and alternative ways to show understanding, and pre-teach key vocabulary.",
+  "Developmental Delay":
+    "Skills across areas may be below age level. Scaffold heavily, use concrete multi-sensory activities, repeat and model frequently, and match pace and expectations to the child's current level.",
+};
+
+export const ACCOMMODATION_GUIDANCE: Record<string, string> = {
+  "Small group testing":
+    "Deliver checks for understanding and assessments in a small-group or 1:1 setting with fewer distractions.",
+  "Audio/online read-aloud":
+    "Provide text and directions as audio or read aloud so reading level isn't a barrier to accessing the content.",
+  "Word prediction software":
+    "Let the student compose with word-prediction or speech-to-text so writing mechanics don't block expressing ideas.",
+  "Visual supports and graphic organizers":
+    "Pair instruction with visuals, anchor charts, and graphic organizers; offer a partially-filled organizer to structure thinking.",
+  "Manipulatives":
+    "Use hands-on objects and models so abstract concepts can be built and seen before moving to symbols.",
+  "Extended time":
+    "Plan a lighter task load or allow more time so the student isn't rushed; build buffer into independent practice.",
+  "Frequent breaks":
+    "Chunk the work and schedule short movement or sensory breaks between segments to sustain attention.",
+  "Preferential seating":
+    "Seat near the teacher/board and away from distractions, positioned for easy check-ins and refocusing cues.",
+};
+
 // Demo student profiles
 export const DEMO_STUDENTS = [
   {
@@ -167,6 +206,30 @@ export type TrialScore = "1/4" | "2/4" | "3/4" | "4/4";
 export type Grade = "6" | "7" | "8";
 export type Subject = "Math" | "ELA";
 
+export type Trial = {
+  date: string;
+  score: TrialScore;
+  notes?: string;
+};
+
+export type StudentGoal = {
+  id: string;
+  area: string;
+  goal: string;
+  targetDate?: string;
+  trials: Trial[];
+};
+
+export const GOAL_AREAS = [
+  "Reading",
+  "Writing",
+  "Math",
+  "Communication",
+  "Attention/Organization",
+  "Behavior/Social",
+  "Functional/Life Skills",
+];
+
 export type ClassStudentEntry = {
   id: string;
   name: string;
@@ -174,6 +237,7 @@ export type ClassStudentEntry = {
   disabilityType: string;
   accommodations: string[];
   readingLevel: string;
+  goals?: StudentGoal[];
 };
 
 export type SchoolClass = {

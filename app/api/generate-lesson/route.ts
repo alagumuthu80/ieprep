@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
+import { DISABILITY_GUIDANCE, ACCOMMODATION_GUIDANCE } from "@/lib/data";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -23,9 +24,30 @@ export async function POST(req: NextRequest) {
 
   const classContext = classStudents?.length
     ? `\n\nClass Roster (${classStudents.length} students):\n${classStudents
-        .map((s: { name: string; disabilityType: string; readingLevel: string; accommodations: string[] }) =>
-          `- ${s.name}: ${s.disabilityType}, reading at ${s.readingLevel}, needs: ${s.accommodations.join(", ")}`
-        ).join("\n")}`
+        .map((s: { name: string; disabilityType: string; readingLevel: string; accommodations: string[]; goals?: { area: string; goal: string }[] }) => {
+          const goalsLine = s.goals?.length
+            ? `\n    IEP goals: ${s.goals.map((g) => `${g.area} — ${g.goal}`).join(" | ")}`
+            : "";
+          return `- ${s.name}: ${s.disabilityType}, reading at ${s.readingLevel}, needs: ${s.accommodations.join(", ")}${goalsLine}`;
+        }).join("\n")}`
+    : "";
+
+  // Enrich bare labels with instructional guidance so the AI designs AROUND each
+  // disability and accommodation instead of just naming them.
+  const disabilityProfiles = disabilityList
+    .map((d: string) => (DISABILITY_GUIDANCE[d] ? `- ${d}: ${DISABILITY_GUIDANCE[d]}` : null))
+    .filter(Boolean)
+    .join("\n");
+  const disabilityProfileBlock = disabilityProfiles
+    ? `\n\nDisability profiles — apply these instructional implications specifically in the activities; do not just name them:\n${disabilityProfiles}`
+    : "";
+
+  const accommodationDetails = (accommodations || [])
+    .map((a: string) => (ACCOMMODATION_GUIDANCE[a] ? `- ${a}: ${ACCOMMODATION_GUIDANCE[a]}` : null))
+    .filter(Boolean)
+    .join("\n");
+  const accommodationBlock = accommodationDetails
+    ? `\n\nAccommodation implementation — build each of these INTO the activities (not a separate list at the end):\n${accommodationDetails}`
     : "";
 
   const isClass = !!classStudents?.length;
@@ -47,15 +69,15 @@ Lesson Configuration:
 - Lesson Timeframe: ${weeks} week(s), ${duration} minutes per session
 - Disability Types Represented: ${disabilityList.join(", ")}
 - Accommodations in Use: ${accommodations.join(", ")}
-- Additional Notes: ${studentNeeds || "None"}${goalContext}${classContext}
+- Additional Notes: ${studentNeeds || "None"}${disabilityProfileBlock}${accommodationBlock}${goalContext}${classContext}
 
 This is a ${numWeeks}-week unit. Spiral the listed SOLs across the unit — introduce, practice, and revisit them so multiple standards are taught together (not one SOL per week in isolation). Break the unit into ${totalSessions} daily class sessions (about ${sessionsPerWeek} sessions per week), each ${duration} minutes long. Each day is ONE class period a teacher will present.
 
 Create a detailed, differentiated lesson plan that:
 1. Addresses ALL listed Virginia SOLs (${solList.join(", ")}), weaving several together within most sessions
 2. Meets the needs of students with: ${disabilityList.join(", ")}
-3. Weaves all accommodations naturally throughout
-4. Uses evidence-based strategies for each disability type represented
+3. Applies each accommodation inside specific activities using its implementation note above — show HOW it is used in the moment, never just restate the accommodation's name
+4. Uses the disability-profile guidance above to choose concrete, evidence-based strategies — tailor to the specific implications listed, not a generic version of the disability
 5. Includes tiered activities so every student can access the content at their level
 ${studentGoals?.length ? "6. Embeds activities that directly advance the listed IEP goals" : ""}
 ${isClass ? "7. Differentiates by student need while keeping one cohesive class lesson" : ""}

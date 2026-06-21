@@ -285,14 +285,15 @@ export default function LessonPlanGenerator({
     setLoading(true);
     abortRef.current = new AbortController();
 
-    // IEP goals are only available for demo students; class students may not have any logged
-    const studentGoals = loadedStudent
-      ? DEMO_STUDENTS.find((s) => s.id === loadedStudent)?.goals.map((g) => ({
-          area: g.area, goal: g.goal,
-          progress: g.trials.length ? g.trials[g.trials.length - 1].score : "N/A",
-          lastScore: g.trials.length ? g.trials[g.trials.length - 1].score : "N/A",
-        }))
-      : undefined;
+    // Prefer goals set on the selected class student; fall back to demo-student goals.
+    const goalSource = selectedStudent?.goals?.length
+      ? selectedStudent.goals
+      : (loadedStudent ? DEMO_STUDENTS.find((s) => s.id === loadedStudent)?.goals : undefined);
+    const studentGoals = goalSource?.map((g) => ({
+      area: g.area, goal: g.goal,
+      progress: g.trials.length ? g.trials[g.trials.length - 1].score : "N/A",
+      lastScore: g.trials.length ? g.trials[g.trials.length - 1].score : "N/A",
+    }));
 
     try {
       const res = await fetch("/api/generate-lesson", {

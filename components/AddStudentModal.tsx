@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { X, Plus } from "lucide-react";
-import type { SchoolClass, ClassStudentEntry } from "@/lib/data";
+import { X, Plus, Trash2, Target } from "lucide-react";
+import { GOAL_AREAS } from "@/lib/data";
+import type { SchoolClass, ClassStudentEntry, StudentGoal } from "@/lib/data";
+
+type GoalDraft = { area: string; goal: string; targetDate: string };
 
 interface AddStudentModalProps {
   isOpen: boolean;
@@ -17,7 +20,18 @@ export default function AddStudentModal({ isOpen, onClose, schoolClass, onAddStu
   const [disabilityCategory, setDisabilityCategory] = useState("SLD");
   const [readingLevel, setReadingLevel] = useState("grade-level");
   const [accommodations, setAccommodations] = useState<string[]>([]);
+  const [goals, setGoals] = useState<GoalDraft[]>([]);
   const [error, setError] = useState("");
+
+  function addGoal() {
+    setGoals([...goals, { area: GOAL_AREAS[0], goal: "", targetDate: "" }]);
+  }
+  function updateGoal(i: number, patch: Partial<GoalDraft>) {
+    setGoals(goals.map((g, idx) => (idx === i ? { ...g, ...patch } : g)));
+  }
+  function removeGoal(i: number) {
+    setGoals(goals.filter((_, idx) => idx !== i));
+  }
 
   const disabilityOptions = ["SLD", "OHI/ADHD", "ASD", "EBD", "ID", "VI", "HI", "OI"];
   const readingLevelOptions = [
@@ -53,6 +67,16 @@ export default function AddStudentModal({ isOpen, onClose, schoolClass, onAddStu
       return;
     }
 
+    const cleanGoals: StudentGoal[] = goals
+      .filter(g => g.goal.trim())
+      .map((g, i) => ({
+        id: `goal_${Date.now()}_${i}`,
+        area: g.area,
+        goal: g.goal.trim(),
+        targetDate: g.targetDate || undefined,
+        trials: [],
+      }));
+
     const newStudent: ClassStudentEntry = {
       id: studentId,
       name,
@@ -60,6 +84,7 @@ export default function AddStudentModal({ isOpen, onClose, schoolClass, onAddStu
       disabilityType: disabilityCategory,
       accommodations,
       readingLevel,
+      ...(cleanGoals.length ? { goals: cleanGoals } : {}),
     };
 
     const updatedClass: SchoolClass = {
@@ -73,6 +98,7 @@ export default function AddStudentModal({ isOpen, onClose, schoolClass, onAddStu
     setDisabilityCategory("SLD");
     setReadingLevel("grade-level");
     setAccommodations([]);
+    setGoals([]);
     onClose();
   }
 
@@ -89,7 +115,8 @@ export default function AddStudentModal({ isOpen, onClose, schoolClass, onAddStu
           background: "var(--gg-white)", borderRadius: "12px",
           border: "1.5px solid var(--gg-card-border)",
           boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
-          padding: "20px", maxWidth: "400px", width: "90%",
+          padding: "20px", maxWidth: "440px", width: "90%",
+          maxHeight: "90vh", overflowY: "auto",
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -194,6 +221,69 @@ export default function AddStudentModal({ isOpen, onClose, schoolClass, onAddStu
                   />
                   {acc}
                 </label>
+              ))}
+            </div>
+          </div>
+
+          {/* IEP Goals */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.8rem", fontWeight: 600, color: "var(--gg-brown-mid)" }}>
+                <Target size={14} /> IEP Goals <span style={{ fontWeight: 400, color: "var(--gg-brown-mid)" }}>(optional)</span>
+              </label>
+              <button
+                onClick={addGoal}
+                type="button"
+                style={{ display: "flex", alignItems: "center", gap: "3px", background: "var(--gg-green-pale)", color: "var(--gg-green)", border: "1px solid var(--gg-green-light)", borderRadius: "6px", padding: "3px 8px", fontSize: "0.72rem", fontWeight: 600, cursor: "pointer" }}
+              >
+                <Plus size={12} /> Add goal
+              </button>
+            </div>
+
+            {goals.length === 0 && (
+              <p style={{ fontSize: "0.72rem", color: "var(--gg-brown-mid)", margin: "0 0 4px" }}>
+                Add measurable IEP goals so lessons can target them. Progress trials are logged later.
+              </p>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {goals.map((g, i) => (
+                <div key={i} style={{ border: "1px solid var(--gg-card-border)", borderRadius: "8px", padding: "8px", background: "var(--gg-beige-pale)" }}>
+                  <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+                    <select
+                      value={g.area}
+                      onChange={e => updateGoal(i, { area: e.target.value })}
+                      className="gg-input text-sm"
+                      style={{ flex: 1, padding: "5px 8px" }}
+                    >
+                      {GOAL_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                    <input
+                      type="date"
+                      value={g.targetDate}
+                      onChange={e => updateGoal(i, { targetDate: e.target.value })}
+                      className="gg-input text-sm"
+                      style={{ padding: "5px 8px" }}
+                      title="Target date"
+                    />
+                    <button
+                      onClick={() => removeGoal(i)}
+                      type="button"
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--gg-pink)", padding: "0 2px" }}
+                      aria-label="Remove goal"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <textarea
+                    value={g.goal}
+                    onChange={e => updateGoal(i, { goal: e.target.value })}
+                    placeholder="e.g., Given grade-level text, Alex will identify the main idea and 2 details with 80% accuracy across 3 consecutive trials."
+                    rows={2}
+                    className="gg-input w-full text-sm"
+                    style={{ padding: "6px 8px", resize: "vertical" }}
+                  />
+                </div>
               ))}
             </div>
           </div>
